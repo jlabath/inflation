@@ -1,0 +1,14 @@
+;; shadow-cljs configuration
+{:dev-http {8081 "public/"}
+
+ :source-paths
+ ["src"]
+
+ :dependencies
+ []
+
+ :builds
+ {:app {:target :browser
+        :output-dir "public/js"
+        :asset-path "/js"
+        :modules {:main {:init-fn cpi.app/main}}}}}
