@@ -10,6 +10,6 @@
 
  :builds
  {:app {:target :browser
-        :output-dir "public/js"
-        :asset-path "/js"
+        :output-dir "public/a"
+        :asset-path "/a"
         :modules {:main {:init-fn cpi.app/main}}}}}
