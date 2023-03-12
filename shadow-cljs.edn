@@ -9,7 +9,15 @@
   [re-frame "1.3.0"]]
 
  :builds
- {:app {:target :browser
+ {:dev {:target :browser
         :output-dir "public/a"
         :asset-path "/a"
-        :modules {:main {:init-fn cpi.app/main}}}}}
+        :modules {:main {:init-fn cpi.app/main}}}
+  :prod {:target :browser
+         :output-dir "web/a"
+         :asset-path "/a"
+         :build-hooks
+         [(shadow.html/copy-file "public/index.html" "web/index.html")
+          (shadow.html/copy-file "public/a/main.css" "web/a/main.css")]
+         :modules {:main {:init-fn cpi.app/main}}}}}
+
