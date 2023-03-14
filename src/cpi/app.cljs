@@ -100,10 +100,6 @@
    (:value db)))
 
 (rf/reg-sub
- :computed-value
- (fn [db _] 10.0))
-
-(rf/reg-sub
  :select-years
 
   ;; input signals 
@@ -113,6 +109,23 @@
  (fn [ratios _] ;;apparently if there is only one it does not send a vector but the value itself when using the syntactic sugar
    (println "doing ratios" (str ratios))
    (sort (map (comp int name) (keys ratios)))))
+
+(rf/reg-sub
+ :computed-value
+ :<- [:ratios]
+ :<- [:select-years]
+ :<- [:year]
+ :<- [:value]
+ (fn [[ratios years cur-year value] _]
+   (let [year (js/Number.parseInt cur-year)
+         years-to-use (sort (filter #(>= % year) years))
+         val (js/Number.parseFloat value)]
+     (println "cputing value from year " (str years-to-use))
+  ;;this works since years are ordered ascending order
+     (reduce #(* %1 (-> %2
+                        str
+                        keyword
+                        ratios)) val years-to-use))))
 
 ;; -- Domino 5 - View Functions ----------------------------------------------
 
