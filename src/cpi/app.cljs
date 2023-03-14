@@ -1,5 +1,7 @@
 (ns cpi.app
-  (:require [re-frame.core :as rf]
+  (:require [goog.string :as gstring]
+            [goog.string.format]
+            [re-frame.core :as rf]
             [reagent.dom]))
 
 ;; -- Domino 1 - Event Dispatch -----------------------------------------------
@@ -9,7 +11,9 @@
 (rf/reg-event-db ;; sets up initial application state
  :initialize ;; usage:  (dispatch [:initialize])
  (fn [_ _] ;; the two parameters are not important here, so use _
-   {:cpi {:2000 95.4
+   {:year 2020
+    :value "100"
+    :cpi {:2000 95.4
           :2001 97.8
           :2002 100.0
           :2003 102.8
@@ -33,6 +37,22 @@
           :2021 141.6
           :2022 151.2}})) ;; so the application state will initially be a map with two keys
 
+(rf/reg-event-db
+ :year-change
+ (fn [db [_ new-year]]
+   (assoc db :year new-year)))
+
+(rf/reg-event-db
+ :value-change
+ (fn [db [_ new-val]]
+   (let [strv (.trim new-val)
+         v (js/Number.parseFloat strv)
+         isNum (complement js/Number.isNaN)]
+     (cond
+       (empty? strv) (assoc db :value strv)
+       (and (isNum v) (>= v 0.0)) (assoc db :value strv)
+       :else db))))
+
 ;; -- Domino 4 - Query  -------------------------------------------------------
 
 (rf/reg-sub ;; a part of the re-frame API
@@ -40,22 +60,92 @@
  (fn [db query-v] ;; `db` is the map out of `app-db`
    (:cpi db))) ;; trivial extraction - no computation
 
+;;here compute the ratios in cpi
+
+;;reducer for cpi to compute the ratios
+;;needs to be curried with cpi hash first
+;;which will yield the reducer function
+(defn ratio-reducer
+  [cpi acc [key-year val-cpi]] (let [prev-cpi-key (-> key-year
+                                                      name
+                                                      js/Number.parseInt
+                                                      dec
+                                                      str
+                                                      keyword)
+                                     prev-cpi-val (prev-cpi-key cpi)]
+                                 (if prev-cpi-val
+                                   (assoc acc key-year (/ val-cpi prev-cpi-val))
+                                   acc)))
+
+(rf/reg-sub
+ :ratios
+
+  ;; signals function
+ (fn [_]
+   [(rf/subscribe [:cpi])]) ;; <-- these inputs are provided to the computation function 
+
+  ;; computation function
+ (fn [[cpi] _] ;; input values supplied in a vector
+   (println "executing reduce" (str cpi))
+   (reduce (partial ratio-reducer cpi) {} cpi)))
+
+(rf/reg-sub
+ :year
+ (fn [db query-v]
+   (:year db)))
+
+(rf/reg-sub
+ :value
+ (fn [db query-v]
+   (:value db)))
+
+(rf/reg-sub
+ :computed-value
+ (fn [db _] 10.0))
+
+(rf/reg-sub
+ :select-years
+
+  ;; input signals 
+ :<- [:ratios] ;; means (subscribe [:ratios] is an input)
+
+  ;; computation function
+ (fn [ratios _] ;;apparently if there is only one it does not send a vector but the value itself when using the syntactic sugar
+   (println "doing ratios" (str ratios))
+   (sort (map (comp int name) (keys ratios)))))
+
 ;; -- Domino 5 - View Functions ----------------------------------------------
+
+(defn input-f
+  []
+  (let [value (rf/subscribe [:value])]
+    [:input {:name "val"
+             :id "val "
+             :on-change #(rf/dispatch [:value-change (-> % .-target .-value)])
+             :value @value}]))
+
+(defn computed-val
+  []
+
+  (let [value (rf/subscribe [:computed-value])]
+    [:div {:class "w-auto"} (gstring/format "%.2f" @value)]))
 
 (defn ui
   []
-  (let [cpi (rf/subscribe [:cpi])
-        years (sort (map (comp int name) (keys @cpi)))]
-    [:div
+  (let [years (rf/subscribe [:select-years])
+        year (rf/subscribe [:year])]
+    [:div {:class "flex w-full flex-col items-center"}
+     [:h3 "Values adjusted to today by yearly average CPI"]
      [:label {:for "year"} "Year:"]
      [:select {:name "year"
-               :id "year"}
-      (for [x years] ^{:key x} [:option {:value x} (str x)])]
+               :id "year"
+               :value @year
+               :on-change #(rf/dispatch [:year-change (-> % .-target .-value)])}
+      (for [x @years] ^{:key x} [:option {:value x} (str x)])]
 
      [:label {:for "val"} "Value:"]
-     [:input {:name "val"
-              :id "val "
-              :value "boo"}]]))
+     (input-f)
+     [:span "Today's value: " (computed-val)]]))
 
 ;; -- Entry Point -------------------------------------------------------------
 
