@@ -1,7 +1,5 @@
 (ns cpi.app
-  (:require [goog.string :as gstring]
-            [goog.string.format]
-            [re-frame.core :as rf]
+  (:require [re-frame.core :as rf]
             [reagent.dom]))
 
 ;; -- Domino 1 - Event Dispatch -----------------------------------------------
@@ -12,7 +10,7 @@
  :initialize ;; usage:  (dispatch [:initialize])
  (fn [_ _] ;; the two parameters are not important here, so use _
    {:year 2020
-    :value "100"
+    :value "20"
     :cpi {:2000 95.4
           :2001 97.8
           :2002 100.0
@@ -35,7 +33,7 @@
           :2019 136.0
           :2020 137.0
           :2021 141.6
-          :2022 151.2}})) ;; so the application state will initially be a map with two keys
+          :2022 151.2}})) ;; initial application state
 
 (rf/reg-event-db
  :year-change
@@ -74,7 +72,10 @@
                                                       keyword)
                                      prev-cpi-val (prev-cpi-key cpi)]
                                  (if prev-cpi-val
-                                   (assoc acc key-year (/ val-cpi prev-cpi-val))
+                                   (assoc acc key-year
+                                          (->
+                                           (/ val-cpi prev-cpi-val)
+                                           (.toFixed 3)))
                                    acc)))
 
 (rf/reg-sub
@@ -122,10 +123,63 @@
          val (js/Number.parseFloat value)]
      (println "cputing value from year " (str years-to-use))
   ;;this works since years are ordered ascending order
-     (reduce #(* %1 (-> %2
-                        str
-                        keyword
-                        ratios)) val years-to-use))))
+     (if (empty? value)
+       0.0
+       (reduce
+        #(.toFixed
+          (*
+           (js/Number.parseFloat %1)
+           (-> %2
+               str
+               keyword
+               ratios
+               js/Number.parseFloat))
+          2)
+        val
+        years-to-use)))))
+
+(defn table-reducer
+  [initial cpi ratios acc year]
+  (let [lastf (comp last last)
+        startv (-> acc
+                   (lastf)
+                   (or initial)
+                   (js/Number.parseFloat))
+        kw (-> year str keyword)
+        rat (-> kw
+                ratios
+                js/Number.parseFloat)
+        cpiv (kw cpi)]
+    (conj
+     acc
+     [(str year)
+      (.toFixed startv 2)
+      (.toFixed cpiv 1)
+      (-> rat
+          js/Number.parseFloat
+          (- 1)
+          (* 100)
+          (.toFixed 1)
+          (str "%"))
+      (-> startv
+          (* rat)
+          (.toFixed 2))])))
+
+(rf/reg-sub
+ :computed-table
+ :<- [:cpi]
+ :<- [:ratios]
+ :<- [:select-years]
+ :<- [:year]
+ :<- [:value]
+ (fn [[cpi ratios years cur-year value] _]
+   (let [year (js/Number.parseInt cur-year)
+         years-to-use (sort (filter #(>= % year) years))]
+     (println "computing table from years " (str years-to-use))
+  ;;this works since years are ordered ascending order
+     (if (empty? value)
+       []
+       (reduce (partial table-reducer value cpi ratios) [] years-to-use)))))
 
 ;; -- Domino 5 - View Functions ----------------------------------------------
 
@@ -141,24 +195,38 @@
   []
 
   (let [value (rf/subscribe [:computed-value])]
-    [:div {:class "w-auto"} (gstring/format "%.2f" @value)]))
+    [:div {:class "w-auto"} @value]))
+
+(defn table
+  []
+
+  (let [table (rf/subscribe [:computed-table])]
+    (println "TABLE IS" @table)
+    [:table {:class "w-auto"}
+     (into [:tbody]
+           (for [row @table]
+             (into [:tr]
+                   (for [col row] [:td (str col)]))))]))
 
 (defn ui
   []
   (let [years (rf/subscribe [:select-years])
         year (rf/subscribe [:year])]
     [:div {:class "flex w-full flex-col items-center"}
-     [:h3 "Values adjusted to today by yearly average CPI"]
-     [:label {:for "year"} "Year:"]
-     [:select {:name "year"
-               :id "year"
-               :value @year
-               :on-change #(rf/dispatch [:year-change (-> % .-target .-value)])}
-      (for [x @years] ^{:key x} [:option {:value x} (str x)])]
 
-     [:label {:for "val"} "Value:"]
-     (input-f)
-     [:span "Today's value: " (computed-val)]]))
+     [:h3 "Values adjusted to today by yearly average CPI"]
+     [:div {:class "flex"}
+      [:label {:for "year"} "Year:"]
+      [:select {:name "year"
+                :id "year"
+                :value @year
+                :on-change #(rf/dispatch [:year-change (-> % .-target .-value)])}
+       (for [x @years] ^{:key x} [:option {:value x} (str x)])]
+
+      [:label {:for "val"} "Amount:"]
+      (input-f)]
+     [:div {:class "flex"} [:span "Today's value: "] (computed-val)]
+     (table)]))
 
 ;; -- Entry Point -------------------------------------------------------------
 
