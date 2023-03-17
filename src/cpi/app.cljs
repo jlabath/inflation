@@ -10,7 +10,7 @@
  :initialize ;; usage:  (dispatch [:initialize])
  (fn [_ _] ;; the two parameters are not important here, so use _
    {:year 2020
-    :value "20"
+    :value "100"
     :cpi {:2000 95.4
           :2001 97.8
           :2002 100.0
@@ -188,6 +188,7 @@
   (let [value (rf/subscribe [:value])]
     [:input {:name "val"
              :id "val "
+             :class "bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
              :on-change #(rf/dispatch [:value-change (-> % .-target .-value)])
              :value @value}]))
 
@@ -195,37 +196,62 @@
   []
 
   (let [value (rf/subscribe [:computed-value])]
-    [:div {:class "w-auto"} @value]))
+    @value))
 
 (defn table
   []
 
   (let [table (rf/subscribe [:computed-table])]
-    (println "TABLE IS" @table)
-    [:table {:class "w-auto"}
-     (into [:tbody]
-           (for [row @table]
-             (into [:tr]
-                   (for [col row] [:td (str col)]))))]))
+    [:div
+     {:class "relative overflow-x-auto shadow-md sm:rounded-lg"}
+     [:table {:class "w-full text-sm text-left text-gray-500 dark:text-gray-400"}
+      [:thead {:class "text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400"}
+       [:tr
+        [:th {:scope "col"
+              :class "px-6 py-3"} "Year"]
+        [:th {:scope "col"
+              :class "px-6 py-3"} "Start Value"]
+        [:th {:scope "col"
+              :class "px-6 py-3"} "CPI"]
+        [:th {:scope "col"
+              :class "px-6 py-3"} "Change"]
+        [:th {:scope "col"
+              :class "px-6 py-3"} "End Value"]]]
+      (into [:tbody]
+            (for [row @table]
+              (into [:tr {:class "bg-white border-b dark:bg-gray-900 dark:border-gray-700"}]
+                    (for [col row] [:td {:class "px-6 py-4"} (str col)]))))]]))
 
 (defn ui
   []
   (let [years (rf/subscribe [:select-years])
         year (rf/subscribe [:year])]
-    [:div {:class "flex w-full flex-col items-center"}
+    [:div {:class "flex w-full flex-col items-center gap-8 mt-8 mb-8"}
 
-     [:h3 "Values adjusted to today by yearly average CPI"]
-     [:div {:class "flex"}
-      [:label {:for "year"} "Year:"]
-      [:select {:name "year"
-                :id "year"
-                :value @year
-                :on-change #(rf/dispatch [:year-change (-> % .-target .-value)])}
-       (for [x @years] ^{:key x} [:option {:value x} (str x)])]
+     [:h2
+      {:class "text-4xl font-extrabold dark:text-white"}
+      "Inflation Calculator"]
+     [:div {:class "grid gap-1 md:grid-cols-2"}
+      [:div
+       [:label {:for "year"
+                :class "block mb-2 text-sm font-medium text-gray-900 dark:text-white"} "Year:"]
+       [:select {:name "year"
+                 :class "bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-auto p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
+                 :id "year"
+                 :value @year
+                 :on-change #(rf/dispatch [:year-change (-> % .-target .-value)])}
+        (for [x @years] ^{:key x} [:option {:value x} (str x)])]]
+      [:div
+       [:label {:for "val"
+                :class "block mb-2 text-sm font-medium text-gray-900 dark:text-white"} "Value:"]
+       (input-f)]]
 
-      [:label {:for "val"} "Amount:"]
-      (input-f)]
-     [:div {:class "flex"} [:span "Today's value: "] (computed-val)]
+     [:div {:class "block max-w-sm p-6 bg-white border border-gray-200 rounded-lg shadow hover:bg-gray-100 dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700"}
+
+      [:p {:class "font-normal text-gray-700 dark:text-gray-400"} "Today's value adjusted for inflation"]
+      [:div {:class "flex justify-center mt-4"}
+       [:h5 {:class "mb-1 text-2xl font-bold tracking-tight text-gray-900 dark:text-white "} (computed-val)]]]
+
      (table)]))
 
 ;; -- Entry Point -------------------------------------------------------------
