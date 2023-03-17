@@ -87,7 +87,6 @@
 
   ;; computation function
  (fn [[cpi] _] ;; input values supplied in a vector
-   (println "executing reduce" (str cpi))
    (reduce (partial ratio-reducer cpi) {} cpi)))
 
 (rf/reg-sub
@@ -108,7 +107,6 @@
 
   ;; computation function
  (fn [ratios _] ;;apparently if there is only one it does not send a vector but the value itself when using the syntactic sugar
-   (println "doing ratios" (str ratios))
    (sort (map (comp int name) (keys ratios)))))
 
 (rf/reg-sub
@@ -121,7 +119,6 @@
    (let [year (js/Number.parseInt cur-year)
          years-to-use (sort (filter #(>= % year) years))
          val (js/Number.parseFloat value)]
-     (println "cputing value from year " (str years-to-use))
   ;;this works since years are ordered ascending order
      (if (empty? value)
        0.0
@@ -175,7 +172,6 @@
  (fn [[cpi ratios years cur-year value] _]
    (let [year (js/Number.parseInt cur-year)
          years-to-use (sort (filter #(>= % year) years))]
-     (println "computing table from years " (str years-to-use))
   ;;this works since years are ordered ascending order
      (if (empty? value)
        []
