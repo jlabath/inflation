@@ -202,7 +202,7 @@
         [:th {:scope "col"
               :class "px-6 py-3"} "Year"]
         [:th {:scope "col"
-              :class "px-6 py-3"} "Yearly Inflation"]
+              :class "px-6 py-3"} "Inflation"]
         [:th {:scope "col"
               :class "px-6 py-3"} "Start Value"]
         [:th {:scope "col"
@@ -216,7 +216,7 @@
   []
   (let [years (rf/subscribe [:select-years])
         year (rf/subscribe [:year])]
-    [:div {:class "flex flex-col items-center gap-8 ml-8 mt-8 mb-8"}
+    [:div {:class "flex flex-col items-center gap-8 mt-8 mb-8"}
 
      [:h2
       {:class "text-4xl font-extrabold dark:text-white"}
