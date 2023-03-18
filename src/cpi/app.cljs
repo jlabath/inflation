@@ -2,8 +2,6 @@
   (:require [re-frame.core :as rf]
             [reagent.dom]))
 
-;; -- Domino 1 - Event Dispatch -----------------------------------------------
-
 ;; -- Domino 2 - Event Handlers -----------------------------------------------
 
 (rf/reg-event-db ;; sets up initial application state
@@ -136,7 +134,7 @@
         years-to-use)))))
 
 (defn table-reducer
-  [initial cpi ratios acc year]
+  [initial ratios acc year]
   (let [lastf (comp last last)
         startv (-> acc
                    (lastf)
@@ -145,38 +143,36 @@
         kw (-> year str keyword)
         rat (-> kw
                 ratios
-                js/Number.parseFloat)
-        cpiv (kw cpi)]
+                js/Number.parseFloat)]
     (conj
      acc
      [(str year)
-      (.toFixed startv 2)
-      (.toFixed cpiv 1)
       (-> rat
           js/Number.parseFloat
           (- 1)
           (* 100)
           (.toFixed 1)
           (str "%"))
+      (.toFixed startv 2)
       (-> startv
           (* rat)
           (.toFixed 2))])))
 
 (rf/reg-sub
  :computed-table
- :<- [:cpi]
  :<- [:ratios]
  :<- [:select-years]
  :<- [:year]
  :<- [:value]
- (fn [[cpi ratios years cur-year value] _]
+ (fn [[ratios years cur-year value] _]
    (let [year (js/Number.parseInt cur-year)
          years-to-use (sort (filter #(>= % year) years))]
   ;;this works since years are ordered ascending order
      (if (empty? value)
        []
-       (reduce (partial table-reducer value cpi ratios) [] years-to-use)))))
+       (reduce (partial table-reducer value ratios) [] years-to-use)))))
 
+;; -- Domino 1 - Event Dispatch -----------------------------------------------
 ;; -- Domino 5 - View Functions ----------------------------------------------
 
 (defn input-f
@@ -206,11 +202,9 @@
         [:th {:scope "col"
               :class "px-6 py-3"} "Year"]
         [:th {:scope "col"
+              :class "px-6 py-3"} "Yearly Inflation"]
+        [:th {:scope "col"
               :class "px-6 py-3"} "Start Value"]
-        [:th {:scope "col"
-              :class "px-6 py-3"} "CPI"]
-        [:th {:scope "col"
-              :class "px-6 py-3"} "Change"]
         [:th {:scope "col"
               :class "px-6 py-3"} "End Value"]]]
       (into [:tbody]
@@ -222,7 +216,7 @@
   []
   (let [years (rf/subscribe [:select-years])
         year (rf/subscribe [:year])]
-    [:div {:class "flex w-full flex-col items-center gap-8 mt-8 mb-8"}
+    [:div {:class "flex flex-col items-center gap-8 ml-8 mt-8 mb-8"}
 
      [:h2
       {:class "text-4xl font-extrabold dark:text-white"}
@@ -248,7 +242,14 @@
       [:div {:class "flex justify-center mt-4"}
        [:h5 {:class "mb-1 text-2xl font-bold tracking-tight text-gray-900 dark:text-white "} (computed-val)]]]
 
-     (table)]))
+     (table)
+    ;;footer
+     (let [cls "font-medium text-blue-600 dark:text-blue-500 hover:underline"]
+       [:div {:class "flex flex-col items-center gap-3"}
+        [:a {:class cls
+             :href "https://www.statcan.gc.ca/en/subjects-start/prices_and_price_indexes/consumer_price_indexes"} "Source Data"]
+        [:a {:class cls
+             :href "https://github.com/jlabath/inflation"} "Source Code"]])]))
 
 ;; -- Entry Point -------------------------------------------------------------
 
