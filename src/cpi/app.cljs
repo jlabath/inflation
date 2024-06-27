@@ -127,9 +127,10 @@
  :<- [:year]
  :<- [:value]
  (fn [[cpi max-year cur-year value] _]
-   (let [val (js/Number.parseFloat value)]
+   (let [val (js/Number.parseFloat value)
+         clean-value (if (js/isNaN val) 0 val)]
      (->
-      (inflation-from-year cpi cur-year max-year val)
+      (inflation-from-year cpi cur-year max-year clean-value)
       (.toFixed 2)))))
 
 (defn table-reducer
@@ -143,8 +144,9 @@
                       value
                       (inflation-from-year cpi start-year (dec year) value))
         end-value (inflation-from-year cpi start-year year value)
-        inflation (-> (/ end-value start-value) (- 1) (* 100))]
-    (assoc acc :result (conj result [(str year) (str (.toFixed inflation 1) "%") (.toFixed start-value 2) (.toFixed end-value 2)]))))
+        inflation (-> (/ end-value start-value) (- 1) (* 100))
+        clean-infl (if (js/isNaN inflation) 0 inflation)]
+    (assoc acc :result (conj result [(str year) (str (.toFixed clean-infl 1) "%") (.toFixed start-value 2) (.toFixed end-value 2)]))))
 
 (rf/reg-sub
  :computed-table
