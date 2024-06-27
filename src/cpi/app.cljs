@@ -9,6 +9,7 @@
  (fn [_ _] ;; the two parameters are not important here, so use _
    {:year 2020
     :value "100"
+    :max-year 2023
     :cpi {:1979 40.0
           :1980 44.0
           :1981 49.5
@@ -78,41 +79,15 @@
  (fn [db query-v] ;; `db` is the map out of `app-db`
    (:cpi db))) ;; trivial extraction - no computation
 
-;;here compute the ratios in cpi
-
-;;reducer for cpi to compute the ratios
-;;needs to be curried with cpi hash first
-;;which will yield the reducer function
-(defn ratio-reducer
-  [cpi acc [key-year val-cpi]] (let [prev-cpi-key (-> key-year
-                                                      name
-                                                      js/Number.parseInt
-                                                      dec
-                                                      str
-                                                      keyword)
-                                     prev-cpi-val (prev-cpi-key cpi)]
-                                 (if prev-cpi-val
-                                   (assoc acc key-year
-                                          (->
-                                           (/ val-cpi prev-cpi-val)
-                                           (.toFixed 3)))
-                                   acc)))
-
-(rf/reg-sub
- :ratios
-
-  ;; signals function
- (fn [_]
-   [(rf/subscribe [:cpi])]) ;; <-- these inputs are provided to the computation function 
-
-  ;; computation function
- (fn [[cpi] _] ;; input values supplied in a vector
-   (reduce (partial ratio-reducer cpi) {} cpi)))
-
 (rf/reg-sub
  :year
  (fn [db query-v]
    (:year db)))
+
+(rf/reg-sub
+ :max-year
+ (fn [db query-v]
+   (:max-year db)))
 
 (rf/reg-sub
  :value
@@ -123,76 +98,71 @@
  :select-years
 
   ;; input signals 
- :<- [:ratios] ;; means (subscribe [:ratios] is an input)
+ :<- [:cpi] ;; means (subscribe [:cpi] is an input)
 
   ;; computation function
- (fn [ratios _] ;;apparently if there is only one it does not send a vector but the value itself when using the syntactic sugar
-   (sort (map (comp int name) (keys ratios)))))
+ (fn [cpi _] ;;apparently if there is only one it does not send a vector but the value itself when using the syntactic sugar
+   (rest (sort (map (comp int name) (keys cpi))))))
+
+(defn inflation-from-year
+  "calculates an inflation from a certain year
+   cpi is the cpi hashmap
+   start-year is most likely whatever the user selected in dropdown 
+   end-year is most likely max-year or diff year if desired
+   val is the amount 
+   returns a js number
+  "
+  [cpi start-year end-year val]
+  (let [year-before-start (dec start-year)
+        start-cpi (get cpi (-> year-before-start str keyword))
+        end-cpi (get cpi (-> end-year str keyword))]
+    (->
+     (* end-cpi val)
+     (/ start-cpi))))
 
 (rf/reg-sub
  :computed-value
- :<- [:ratios]
- :<- [:select-years]
+ :<- [:cpi]
+ :<- [:max-year]
  :<- [:year]
  :<- [:value]
- (fn [[ratios years cur-year value] _]
-   (let [year (js/Number.parseInt cur-year)
-         years-to-use (sort (filter #(>= % year) years))
-         val (js/Number.parseFloat value)]
-  ;;this works since years are ordered ascending order
-     (if (empty? value)
-       0.0
-       (reduce
-        #(.toFixed
-          (*
-           (js/Number.parseFloat %1)
-           (-> %2
-               str
-               keyword
-               ratios
-               js/Number.parseFloat))
-          2)
-        val
-        years-to-use)))))
+ (fn [[cpi max-year cur-year value] _]
+   (let [val (js/Number.parseFloat value)]
+     (->
+      (inflation-from-year cpi cur-year max-year val)
+      (.toFixed 2)))))
 
 (defn table-reducer
-  [initial ratios acc year]
-  (let [lastf (comp last last)
-        startv (-> acc
-                   (lastf)
-                   (or initial)
-                   (js/Number.parseFloat))
-        kw (-> year str keyword)
-        rat (-> kw
-                ratios
-                js/Number.parseFloat)]
-    (conj
-     acc
-     [(str year)
-      (-> rat
-          js/Number.parseFloat
-          (- 1)
-          (* 100)
-          (.toFixed 1)
-          (str "%"))
-      (.toFixed startv 2)
-      (-> startv
-          (* rat)
-          (.toFixed 2))])))
+  "reducer function for computed-table
+   returns a vector of computed values as strings
+  "
+  [{:keys [cpi value result start-year]
+    :as acc}
+   year]
+  (let [start-value (if (= start-year year)
+                      value
+                      (inflation-from-year cpi start-year (dec year) value))
+        end-value (inflation-from-year cpi start-year year value)
+        inflation (-> (/ end-value start-value) (- 1) (* 100))]
+    (assoc acc :result (conj result [(str year) (str (.toFixed inflation 1) "%") (.toFixed start-value 2) (.toFixed end-value 2)]))))
 
 (rf/reg-sub
  :computed-table
- :<- [:ratios]
+ :<- [:cpi]
  :<- [:select-years]
  :<- [:year]
  :<- [:value]
- (fn [[ratios years cur-year value] _]
+ (fn [[cpi years cur-year value] _]
    (let [year (js/Number.parseInt cur-year)
          years-to-use (sort (filter #(>= % year) years))]
-  ;;this works since years are ordered ascending order
+     ;;this works since years are ordered ascending order
      (if (empty? value)
        []
-       (reduce (partial table-reducer value ratios) [] years-to-use)))))
+       (-> (reduce table-reducer {:cpi cpi
+                                  :start-year year
+                                  :value (js/Number.parseFloat value)
+                                  :result []} years-to-use)
+           (get :result))))))
 
 ;; -- Domino 1 - Event Dispatch -----------------------------------------------
 ;; -- Domino 5 - View Functions ----------------------------------------------
